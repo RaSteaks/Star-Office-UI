@@ -14,18 +14,19 @@
         body { margin: 0; background: var(--bg); color: #eee; font-family: "PingFang SC", sans-serif; overflow: hidden; }
         #graph { width: 100vw; height: 100vh; }
         
-        /* Fixed Links Visibility */
-        .link { stroke: #444; stroke-opacity: 0.6; stroke-width: 1.5px; pointer-events: none; }
-        .link.highlighted { stroke: var(--accent); stroke-opacity: 1; stroke-width: 2.5px; }
-        
+        .link { stroke: #333; stroke-opacity: 0.4; stroke-width: 1.2px; pointer-events: none; }
         .node { stroke: #fff; stroke-width: 1px; cursor: pointer; transition: all 0.3s; }
         .node.selected { stroke: var(--gold); stroke-width: 3px; r: 14; filter: drop-shadow(0 0 10px var(--gold)); }
-        .node.dimmed { opacity: 0.2; }
         .node.highlighted { stroke: var(--accent); stroke-width: 2px; filter: drop-shadow(0 0 8px var(--accent)); }
 
-        .label-bg { fill: rgba(0,0,0,0.7); backdrop-filter: blur(4px); rx: 10; ry: 10; opacity: 0; pointer-events: none; }
-        .label-text { font-size: 11px; pointer-events: none; fill: #fff; opacity: 0; }
-        .node.focused + .label-bg, .node.focused ~ .label-text { opacity: 1 !important; }
+        /* Optimized Label Visibility */
+        .label-bg { fill: rgba(0,0,0,0.8); backdrop-filter: blur(4px); rx: 8; ry: 8; opacity: 0; pointer-events: none; stroke: var(--border); stroke-width: 0.5px; transition: opacity 0.3s; }
+        .label-text { font-size: 11px; pointer-events: none; fill: #fff; opacity: 0; transition: opacity 0.3s; }
+        
+        /* Focus state logic: Highlight single node clearly */
+        .node-group.focused .label-bg, .node-group.focused .label-text { opacity: 1 !important; }
+        .node-group.selected .label-bg { opacity: 1 !important; fill: rgba(10,30,50,0.9); border: 1px solid var(--gold); }
+        .node-group.selected .label-text { opacity: 1 !important; font-weight: bold; }
 
         #preview-panel { 
             position: absolute; top: 20px; right: -850px; width: 500px; height: calc(100vh - 40px); 
@@ -36,19 +37,20 @@
         }
         #preview-panel.open { right: 20px; }
         #resizer { position: absolute; left: 0; top: 0; width: 6px; height: 100%; cursor: ew-resize; background: transparent; }
-        
+        #resizer:hover { background: var(--accent); opacity: 0.3; }
+
         .panel-header { padding: 20px 25px; border-bottom: 1px solid var(--border); }
         .actions-bar { display: flex; gap: 10px; margin-top: 15px; }
         .btn { padding: 6px 12px; font-size: 11px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border); transition: all 0.2s; background: rgba(255,255,255,0.05); color: #ccc; text-decoration: none; }
         .btn:hover { background: var(--accent); color: #000; }
 
         .panel-content { padding: 30px; overflow-y: auto; flex: 1; font-size: 14px; line-height: 1.7; color: #ddd; }
+        .panel-content h1, .panel-content h2 { color: var(--accent); border-bottom: 1px solid var(--border); margin-top: 1.5em; }
         
         #controls-container { position: absolute; top: 25px; left: 25px; display: flex; flex-direction: column; gap: 15px; z-index: 100; }
         #search-input { width: 280px; padding: 12px 20px; border-radius: 25px; background: var(--panel); border: 1px solid var(--border); color: #fff; outline: none; }
         
         .glass-box { background: var(--panel); border: 1px solid var(--border); padding: 15px; border-radius: 12px; backdrop-filter: blur(10px); }
-        .config-section { margin-bottom: 15px; }
         .config-title { font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: bold; }
         
         .color-picker { display: flex; gap: 8px; }
@@ -58,26 +60,21 @@
 </head>
 <body>
     <div id="controls-container">
-        <input type="text" id="search-input" placeholder="Search Memory Hub..." autocomplete="off">
-        
+        <input type="text" id="search-input" placeholder="Search Neural Synapses..." autocomplete="off">
         <div class="glass-box">
-            <div class="config-section">
-                <div class="config-title">Layer Filter</div>
-                <label style="font-size:11px; display:block; margin-bottom:5px;"><input type="checkbox" id="filter-core" checked> Core (MEMORY)</label>
-                <label style="font-size:11px; display:block; margin-bottom:5px;"><input type="checkbox" id="filter-logs" checked> Logs (C盘)</label>
-                <label style="font-size:11px; display:block;"><input type="checkbox" id="filter-assets" checked> Assets (D盘)</label>
-            </div>
+            <div class="config-title">Filters</div>
+            <label style="font-size:11px; display:block; margin-bottom:5px;"><input type="checkbox" id="filter-core" checked> Core (MEMORY)</label>
+            <label style="font-size:11px; display:block; margin-bottom:5px;"><input type="checkbox" id="filter-logs" checked> Logs (C盘)</label>
+            <label style="font-size:11px; display:block;"><input type="checkbox" id="filter-assets" checked> Assets (D盘)</label>
             
-            <div class="config-section" id="node-config" style="display:none; border-top: 1px solid var(--border); padding-top:10px;">
-                <div class="config-title">Node Appearance</div>
+            <div id="node-config" style="display:none; border-top: 1px solid var(--border); margin-top:15px; padding-top:10px;">
+                <div class="config-title">Appearance</div>
                 <div class="color-picker" id="node-color-picker">
                     <div class="color-circle" data-color="#42b983" style="background:#42b983"></div>
                     <div class="color-circle" data-color="#3498db" style="background:#3498db"></div>
                     <div class="color-circle" data-color="#e74c3c" style="background:#e74c3c"></div>
-                    <div class="color-circle" data-color="#9b59b6" style="background:#9b59b6"></div>
                     <div class="color-circle" data-color="#f1c40f" style="background:#f1c40f"></div>
                 </div>
-                <label style="font-size:11px; display:block; margin-top:10px;"><input type="checkbox" id="node-highlight"> Permanent Highlight</label>
             </div>
         </div>
     </div>
@@ -88,11 +85,11 @@
             <button class="btn" style="float:right" onclick="closePanel()">CLOSE</button>
             <h2 id="panel-title" style="margin:0; font-size:18px;"></h2>
             <div class="actions-bar">
-                <a id="btn-raw-pdf" class="btn btn-pdf" target="_blank" style="display:none; color:var(--gold); border-color:var(--gold);">📄 VIEW PDF</a>
+                <a id="btn-raw-pdf" class="btn" target="_blank" style="display:none; color:var(--gold); border-color:var(--gold);">📄 VIEW PDF</a>
                 <button class="btn" onclick="resetWidth()">RESET WIDTH</button>
             </div>
         </div>
-        <div id="panel-body" class="panel-content">Select node to view...</div>
+        <div id="panel-body" class="panel-content">Select a node...</div>
     </div>
     
     <svg id="graph"></svg>
@@ -101,27 +98,24 @@
         const svg = d3.select("#graph"), width = window.innerWidth, height = window.innerHeight;
         const g = svg.append("g");
         const panel = document.getElementById("preview-panel");
-        let allNodesData = [], allLinksData = [];
-        let curNodes = [], curLinks = [];
-        let selectedId = null;
+        let allNodesData = [], allLinksData = [], curNodes = [], curLinks = [], selectedId = null;
         
         let simulation = d3.forceSimulation()
-            .force("link", d3.forceLink().id(d => d.id).distance(180))
-            .force("charge", d3.forceManyBody().strength(-600))
+            .force("link", d3.forceLink().id(d => d.id).distance(220)) // Increased distance
+            .force("charge", d3.forceManyBody().strength(-800)) // Stronger repulsion
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collision", d3.forceCollide().radius(55));
+            .force("collision", d3.forceCollide().radius(80)); // Heavily increased collision radius for text
 
         d3.json("/api/memory/graph").then(graph => {
-            allNodesData = graph.nodes.map(n => ({...n, customColor: null, isHighlighted: false}));
+            allNodesData = graph.nodes.map(n => ({...n, customColor: null}));
             allLinksData = graph.links;
             updateFilter();
             setupInteractions();
         });
 
         function renderGraph(nodes, links) {
-            // Preservation of state
             const oldG = g.selectAll(".node-group").data(nodes, d => d.id);
-            const oldL = g.selectAll(".link").data(links, d => d.source.id + "-" + d.target.id);
+            const oldL = g.selectAll(".link").data(links, d => (d.source.id || d.source) + "-" + (d.target.id || d.target));
 
             oldL.exit().remove();
             const link = oldL.enter().insert("line", ":first-child").attr("class", "link").merge(oldL);
@@ -132,19 +126,25 @@
                 .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended))
                 .merge(oldG);
 
-            nodeGroup.selectAll("circle").remove();
+            nodeGroup.selectAll("*").remove();
             nodeGroup.append("circle").attr("class", "node")
                 .attr("r", d => d.id === "MEMORY" ? 18 : 8)
                 .attr("fill", d => d.customColor || (d.id === "MEMORY" ? "var(--gold)" : (d.group === 1 ? "#42b983" : "#3498db")))
-                .classed("selected", d => d.id === selectedId)
-                .classed("highlighted", d => d.isHighlighted);
+                .classed("selected", d => d.id === selectedId);
 
-            nodeGroup.selectAll("rect").remove(); nodeGroup.append("rect").attr("class", "label-bg");
-            nodeGroup.selectAll("text").remove(); nodeGroup.append("text").attr("class", "label-text").attr("dx", 18).attr("dy", 4).text(d => d.id.length > 25 ? d.id.substr(0,22)+'...' : d.id);
+            nodeGroup.append("rect").attr("class", "label-bg");
+            const labels = nodeGroup.append("text").attr("class", "label-text").attr("dx", 18).attr("dy", 4)
+                .text(d => d.id.length > 25 ? d.id.substr(0,22)+'...' : d.id);
+
+            labels.each(function() {
+                const bbox = this.getBBox();
+                d3.select(this.parentNode).select("rect")
+                    .attr("x", bbox.x - 6).attr("y", bbox.y - 3).attr("width", bbox.width + 12).attr("height", bbox.height + 6);
+            });
 
             simulation.nodes(nodes);
             simulation.force("link").links(links);
-            simulation.alpha(0.3).restart();
+            simulation.alpha(0.5).restart();
 
             simulation.on("tick", () => {
                 link.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
@@ -154,16 +154,9 @@
 
         function selectNode(d, el) {
             selectedId = d.id;
-            d3.selectAll(".node").classed("selected", false);
-            d3.select(el).select(".node").classed("selected", true);
-            
-            // Show Node Config
+            d3.selectAll(".node-group").classed("selected", false);
+            d3.select(el).classed("selected", true);
             document.getElementById("node-config").style.display = "block";
-            document.getElementById("node-highlight").checked = d.isHighlighted;
-            document.querySelectorAll(".color-circle").forEach(c => {
-                c.classList.toggle("active", c.getAttribute("data-color") === d.customColor);
-            });
-
             openNode(d.id);
         }
 
@@ -181,33 +174,6 @@
             } catch (err) { }
         }
 
-        function setupInteractions() {
-            document.querySelectorAll(".color-circle").forEach(c => {
-                c.onclick = () => {
-                    const color = c.getAttribute("data-color");
-                    const node = allNodesData.find(n => n.id === selectedId);
-                    if (node) {
-                        node.customColor = (node.customColor === color) ? null : color;
-                        renderGraph(curNodes, curLinks);
-                        c.classList.toggle("active", node.customColor === color);
-                    }
-                };
-            });
-            document.getElementById("node-highlight").onchange = (e) => {
-                const node = allNodesData.find(n => n.id === selectedId);
-                if (node) { node.isHighlighted = e.target.checked; renderGraph(curNodes, curLinks); }
-            };
-            document.getElementById("search-input").oninput = (e) => {
-                const term = e.target.value.toLowerCase();
-                const target = allNodesData.find(n => n.id.toLowerCase().includes(term));
-                if (target) {
-                    const k = 2.0; const x = width/2 - target.x*k; const y = height/2 - target.y*k;
-                    svg.transition().duration(800).call(d3.zoom().transform, d3.zoomIdentity.translate(x,y).scale(k));
-                }
-            };
-            ["filter-core","filter-logs","filter-assets"].forEach(id => document.getElementById(id).addEventListener("change", updateFilter));
-        }
-
         function updateFilter() {
             const showC = document.getElementById("filter-core").checked, showL = document.getElementById("filter-logs").checked, showA = document.getElementById("filter-assets").checked;
             curNodes = allNodesData.filter(n => (n.id==="MEMORY"?showC : (n.group===1?showL : showA)));
@@ -216,20 +182,31 @@
             renderGraph(curNodes, curLinks);
         }
 
-        function closePanel() { panel.classList.remove("open"); selectedId = null; d3.selectAll(".node").classed("selected", false); document.getElementById("node-config").style.display = "none"; }
+        function setupInteractions() {
+            ["filter-core","filter-logs","filter-assets"].forEach(id => document.getElementById(id).addEventListener("change", updateFilter));
+            document.getElementById("search-input").oninput = (e) => {
+                const term = e.target.value.toLowerCase();
+                const target = allNodesData.find(n => n.id.toLowerCase().includes(term));
+                if (target) { const k = 2.0; const x = width/2 - target.x*k; const y = height/2 - target.y*k; svg.transition().duration(800).call(d3.zoom().transform, d3.zoomIdentity.translate(x,y).scale(k)); }
+            };
+        }
+
+        function closePanel() { panel.classList.remove("open"); selectedId = null; d3.selectAll(".node-group").classed("selected", false); document.getElementById("node-config").style.display = "none"; }
         function resetWidth() { panel.style.width = "500px"; }
         let isR = false; resizer.onmousedown = () => isR = true;
         document.onmousemove = (e) => { if(!isR)return; const nw = window.innerWidth - e.clientX; if(nw>300 && nw < window.innerWidth*0.8) panel.style.width = nw+"px"; };
         document.onmouseup = () => isR = false;
+
         svg.call(d3.zoom().scaleExtent([0.1, 8]).on("zoom", (e) => {
             g.attr("transform", e.transform);
             const {k,x,y} = e.transform;
-            g.selectAll(".node").each(function(d){
+            g.selectAll(".node-group").each(function(d){
                 const sx = d.x*k+x, sy = d.y*k+y;
                 const vis = k>=1.8 && Math.abs(sx-width/2)<width*0.22 && Math.abs(sy-height/2)<height*0.22;
                 d3.select(this).classed("focused", d.id === selectedId || vis);
             });
         }));
+
         function dragstarted(e,d){ if(!e.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; }
         function dragged(e,d){ d.fx=e.x; d.fy=e.y; }
         function dragended(e,d){ if(!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }

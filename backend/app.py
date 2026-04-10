@@ -40,44 +40,27 @@ def api_mem_content():
     if not target_path or not os.path.exists(target_path):
         return jsonify({"error": f"Not Found: {decoded_id}"}), 404
     
-    # 查找关联的原始 PDF
-    # 原理：假设 PDF 在同一个目录下，或者父目录的 raw 下，且文件名相同
+    # PDF Link detection
     pdf_path = None
-    base_dir = os.path.dirname(target_path)
-    base_name = os.path.basename(target_path).replace(".md", "")
-    
-    possible_pdfs = [
-        os.path.join(base_dir, base_name + ".pdf"),
-        os.path.join(os.path.dirname(base_dir), base_name + ".pdf"),
-        os.path.join(base_dir, "raw", base_name + ".pdf")
-    ]
-    for p_pdf in possible_pdfs:
-        if os.path.exists(p_pdf):
-            pdf_path = p_pdf
-            break
+    base_dir, base_name = os.path.dirname(target_path), os.path.basename(target_path).replace(".md", "")
+    for p_pdf in [os.path.join(base_dir, base_name+".pdf"), os.path.join(os.path.dirname(base_dir), base_name+".pdf")]:
+        if os.path.exists(p_pdf): pdf_path = p_pdf; break
 
     try:
         with open(target_path, "r", encoding="utf-8") as f:
             content = f.read()
         
-        # 简单的图片链接处理
         def safe_replace_img(match):
             try:
                 alt, img_p = match.group(1), match.group(2)
                 img_p_u = urllib.parse.unquote(img_p)
-                full_p = img_p_u if ":" in img_p_u else os.path.abspath(os.path.join(base_dir, img_p_u))
+                full_p = img_p_u if ":" in img_p_u else os.path.abspath(os.path.join(os.path.dirname(target_path), img_p_u))
                 return f'![{alt}](/api/memory/image?path={urllib.parse.quote(full_p)})'
             except: return match.group(0)
 
-        content = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', safe_replace_img, content)
-        
-        return jsonify({
-            "id": decoded_id, 
-            "content": content, 
-            "pdf_link": f"/api/memory/pdf?path={urllib.parse.quote(pdf_path)}" if pdf_path else None
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        processed_content = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', safe_replace_img, content)
+        return jsonify({"id": decoded_id, "content": processed_content, "pdf_link": f"/api/memory/pdf?path={urllib.parse.quote(pdf_path)}" if pdf_path else None})
+    except Exception as e: return jsonify({"error": str(e)}), 500
 
 @app.route("/api/memory/pdf")
 def api_mem_pdf():
@@ -90,18 +73,28 @@ def api_mem_pdf():
 
 @app.route("/api/memory/image")
 def api_mem_image():
-    p = request.args.get("path")
-    if not p: return "400", 400
-    p = os.path.normpath(urllib.parse.unquote(p))
-    if os.path.exists(p):
-        mime, _ = mimetypes.guess_type(p)
-        with open(p, "rb") as f:
-            return Response(f.read(), mimetype=mime or "application/octet-stream")
+    path_param = request.args.get("path")
+    if not path_param: return "400", 400
+    try:
+        real_path = os.path.normpath(urllib.parse.unquote(path_param))
+        if os.path.exists(real_path):
+            mime, _ = mimetypes.guess_type(real_path)
+            with open(real_path, "rb") as f:
+                return Response(f.read(), mimetype=mime or "application/octet-stream")
+    except: pass
     return "404", 404
 
 @app.route("/memory-graph")
 def mem_graph_page():
     return send_from_directory(FRONTEND_DIR, "memory_graph.html")
+
+@app.route("/yesterday-memo")
+def yesterday_memo():
+    from memo_utils import get_yesterday_date_str, extract_memo_from_file, DEFAULT_MEMORY_PATH
+    try:
+        f_path = os.path.join(DEFAULT_MEMORY_PATH, get_yesterday_date_str() + ".md")
+        return jsonify({"memo": extract_memo_from_file(f_path) if os.path.exists(f_path) else "Yesterday is a ghost."})
+    except: return jsonify({"memo": "Error."})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=19000)
